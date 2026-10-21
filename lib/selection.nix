@@ -86,7 +86,17 @@ let
       throw "agent-skills: ${context} refers to unknown skills: ${lib.concatStringsSep ", " unknown}"
     else checked;
 
-  allowlistFor = { catalog, sources, enableAll ? false, enable ? [ ] }:
+  # Expand a list of skill IDs and source-tree nodes into catalog IDs.
+  expandEntries = context: catalog: entries:
+    if !isList entries then
+      throw "agent-skills: ${context} must be a list of skill IDs or source-tree nodes"
+    else if !(builtins.all (entry: isString entry || isSourceNode entry) entries) then
+      throw "agent-skills: ${context} must contain skill IDs or source-tree nodes"
+    else
+      normalizeIds context (filter isString entries)
+      ++ lib.concatMap (node: nodeIds context catalog node) (filter isSourceNode entries);
+
+  allowlistFor = { catalog, sources, enableAll ? false, enable ? [ ], exclude ? [ ] }:
     let
       sourceConfigs = normalizeSources sources;
       checkedCatalog = assertAttrs "catalog" catalog;
@@ -104,25 +114,19 @@ let
           attrNames (lib.filterAttrs (_: skill: skill.source == sourceName) checkedCatalog)
         )
         enableAllSources;
-      checkedEnable =
-        if !isList enable then
-          throw "agent-skills: skills.enable must be a list of skill IDs or source-tree nodes"
-        else if !(builtins.all (entry: isString entry || isSourceNode entry) enable) then
-          throw "agent-skills: skills.enable must contain skill IDs or source-tree nodes"
-        else
-          enable;
-      enableIds = filter isString checkedEnable;
-      enableNodeIds = lib.concatMap
-        (node: nodeIds "skills.enable" checkedCatalog node)
-        (filter isSourceNode checkedEnable);
       selected =
         (if isBool enableAll && enableAll then attrNames checkedCatalog else [ ])
         ++ sourceAllowlist
-        ++ normalizeIds "skills.enable" enableIds
-        ++ enableNodeIds;
+        ++ expandEntries "skills.enable" checkedCatalog enable;
+      excluded = catalogIds "skills.exclude" checkedCatalog
+        (expandEntries "skills.exclude" checkedCatalog exclude);
     in
     builtins.seq sourceConfigs (
-      builtins.seq checkedCatalog (catalogIds "skills.enable" checkedCatalog selected)
+      builtins.seq checkedCatalog (
+        builtins.seq excluded (
+          lib.subtractLists excluded (catalogIds "skills.enable" checkedCatalog selected)
+        )
+      )
     );
 
   # Disabled declarations need no source, but their enable flag must still be

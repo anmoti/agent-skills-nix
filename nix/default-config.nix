@@ -5,6 +5,7 @@
   sources = { };
   skills = {
     enable = [ ];
+    exclude = [ ];
     enableAll = false;
     flatten = false;
     explicit = { };

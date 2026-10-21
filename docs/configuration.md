@@ -85,6 +85,10 @@ or source names fail evaluation.
 (`repository -> group -> skill`; see [Source registry](./source-registry.md)).
 A non-skill node expands to every skill below it.
 
+`skills.exclude` takes the same entries and removes them from the selection
+built from `skills.enable` and `skills.enableAll`. Lists from several modules
+are concatenated, like `home.packages`.
+
 Set `skills.flatten = true;` to expose each selected skill under its basename
 instead of its nested ID. Use it for agents that scan only one directory level,
 such as Claude Code (`skills/<name>/SKILL.md`). Basename collisions fail

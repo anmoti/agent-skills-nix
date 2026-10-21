@@ -138,6 +138,17 @@ in
             example = [ "format-pr" "nix-review" ];
           };
 
+          exclude = lib.mkOption {
+            type = lib.types.listOf (lib.types.either lib.types.str lib.types.attrs);
+            default = [ ];
+            description = ''
+              Skill IDs or source-tree nodes to remove from the selection built
+              from `enable` and `enableAll`. Lists from several modules are
+              concatenated, like `enable`.
+            '';
+            example = [ "mattpocock/productivity/grill-me" ];
+          };
+
           flatten = lib.mkOption {
             type = lib.types.bool;
             default = false;
@@ -163,6 +174,7 @@ in
       });
       default = {
         enable = [ ];
+        exclude = [ ];
         enableAll = false;
         flatten = false;
         explicit = { };
@@ -212,6 +224,7 @@ in
         sources = cfg.sources;
         enableAll = cfg.skills.enableAll;
         enable = cfg.skills.enable;
+        exclude = cfg.skills.exclude;
       };
       selection = agentLib.selectSkills {
         inherit catalog allowlist;

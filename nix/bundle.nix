@@ -8,6 +8,7 @@ let
     sources = config.sources;
     enableAll = config.skills.enableAll;
     enable = config.skills.enable;
+    exclude = config.skills.exclude or [ ];
   };
   selection = agentLib.selectSkills {
     inherit catalog allowlist;

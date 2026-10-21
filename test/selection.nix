@@ -31,6 +31,9 @@ let
     empty-enable-node = rejected (treeAllowlist {
       enable = [ { __sourceName = "nested"; __relPath = "missing"; __skill = false; } ];
     });
+    invalid-exclude-type = rejected (allowlist { exclude = "fixture"; });
+    invalid-exclude-entry = rejected (allowlist { exclude = [ null ]; });
+    unknown-exclude-id = rejected (builtins.length (allowlist { enable = [ "fixture" ]; exclude = [ "missing" ]; }));
     unknown-allowlist-id = selectionRejected { allowlist = [ "missing" ]; };
     invalid-allowlist-type = selectionRejected { allowlist = "fixture"; };
     invalid-allowlist-id = selectionRejected { allowlist = [ "" ]; };
@@ -136,6 +139,9 @@ assert allowlist { } == [ ];
 assert treeRootIds == [ "cat-a/skill-1" "cat-a/skill-2" ];
 assert treeGroupIds == treeRootIds;
 assert treeSkillIds == [ "cat-a/skill-1" ];
+assert treeAllowlist { enable = [ nestedTree ]; exclude = [ "cat-a/skill-2" ]; } == [ "cat-a/skill-1" ];
+assert treeAllowlist { enable = [ nestedTree ]; exclude = [ nestedTree."cat-a"."skill-1" ]; } == [ "cat-a/skill-2" ];
+assert allowlist { enableAll = true; exclude = [ "fixture" ]; } == [ ];
 assert flatCollision;
 assert ids == [ "fixture" "null-name" "renamed/skill" ];
 assert lib.all (id: selection.${id}.id == id) ids;
