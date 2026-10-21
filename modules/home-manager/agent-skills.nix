@@ -38,6 +38,21 @@ in
       bundle = cfg.bundlePath;
     in
     {
+      # Follow the matching Home Manager program. Priority 900 beats the
+      # built-in target defaults (mkDefault, 1000) but not a plain assignment.
+      programs.agent-skills.targets = lib.mapAttrs
+        (_: enabled: { enable = lib.mkOverride 900 enabled; })
+        {
+          claude = config.programs.claude-code.enable or false;
+          opencode = config.programs.opencode.enable or false;
+          codex = config.programs.codex.enable or false;
+          copilot = config.programs.github-copilot-cli.enable or false;
+          cursor = config.programs.cursor.enable or false;
+          windsurf = config.programs.windsurf.enable or false;
+          antigravity = config.programs.antigravity.enable or false;
+          pi = config.programs.pi-coding-agent.enable or false;
+        };
+
       warnings = lib.optionals (!anyTargetEnabled) [
         "agent-skills: programs.agent-skills.enable is true, but no install targets are enabled. Set targets.<name>.enable = true (for example, targets.claude.enable = true)."
       ];
