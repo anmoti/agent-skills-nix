@@ -134,7 +134,7 @@ let
           assertOnlyKeys context [ "filter" "idPrefix" "pin" "subdir" ] value
         else
           throw "agent-skills: ${context} must evaluate to an attribute set";
-      normalized = normalizeDiscoveryConfig context (builtins.removeAttrs manifest [ "pin" ]) // {
+      normalized = normalizeDiscoveryConfig context (removeAttrs manifest [ "pin" ]) // {
         pin = validatePin name manifest.pin;
       };
     in
@@ -172,6 +172,67 @@ let
       manifests = builtins.listToAttrs (map load files);
     in
     builtins.deepSeq manifests manifests;
+
+  # Build a repository -> group -> skill selector tree for one source.
+  #
+  # Each node carries the root source config in `__source` (used by
+  # normalizeSources), its repository name in `__sourceName`, its path relative
+  # to the source root in `__relPath`, and whether that path is itself a skill
+  # in `__skill`. Non-skill nodes expand to every skill below them.
+  mkSourceTree = name: value:
+    let
+      source = sourceConfig.normalizeSourceConfig name value;
+      root =
+        if source.subdir == "." then source.path
+        else source.path + "/${source.subdir}";
+      effectiveMax = if source.filter.maxDepth == null then 100 else source.filter.maxDepth;
+      nameRegex = source.filter.nameRegex;
+      metadata = {
+        __source = source;
+        __sourceName = name;
+      };
+      hasChildren = node:
+        removeAttrs node [ "__source" "__sourceName" "__relPath" "__skill" ] != { };
+
+      scan = path: relParts: depth:
+        let
+          entries = readDir path;
+          relPath = lib.concatStringsSep "/" relParts;
+          hasSkill = entries ? "SKILL.md";
+          skill = hasSkill && (nameRegex == null || match nameRegex relPath != null);
+          # A skill is a leaf. The repository root may still be both a skill
+          # and a group, so only stop below the root.
+          canDescend = depth < effectiveMax && !(hasSkill && relPath != "");
+          dirs = lib.concatMap
+            (entry:
+              if entries.${entry} == "directory" || entries.${entry} == "symlink" then [ entry ]
+              else [ ])
+            (attrNames entries);
+          children =
+            if canDescend then
+              builtins.listToAttrs (lib.concatMap
+                (childName:
+                  let
+                    child = scan (path + "/${childName}") (relParts ++ [ childName ]) (depth + 1);
+                  in
+                  if child.__skill || hasChildren child then
+                    [ { name = childName; value = child; } ]
+                  else
+                    [ ])
+                dirs)
+            else
+              { };
+        in
+        metadata // {
+          __relPath = relPath;
+          __skill = skill;
+        } // children;
+    in
+    if source.path == null then
+      throw "agent-skills: mkSourceTree requires a path-backed source (${name})"
+    else if !pathExists root then
+      throw "agent-skills: source ${name} path ${toString root} does not exist"
+    else scan root [ ] 0;
 
   gitRepositoryUrl = name: repository:
     let
@@ -237,9 +298,9 @@ let
       plan = npinsPinFetchPlan name pin;
     in
     if plan.fetcher == "tarball" then
-      builtins.fetchTarball plan.args
+      fetchTarball plan.args
     else if plan.fetcher == "git" then
-      (builtins.fetchGit plan.args).outPath
+      (fetchGit plan.args).outPath
     else
       throw "agent-skills: internal error: unsupported source fetcher ${plan.fetcher}";
 
@@ -290,10 +351,11 @@ let
       throw "agent-skills: source manifests and lock pins differ (manifests: ${lib.concatStringsSep ", " manifestNames}; lock: ${lib.concatStringsSep ", " pinNames}); run skills-sources-lock"
     else
       builtins.mapAttrs
-        (name: manifest: {
-          path = fetchPin name pins.${name};
-          inherit (manifest) filter idPrefix subdir;
-        })
+        (name: manifest:
+          mkSourceTree name {
+            path = fetchPin name pins.${name};
+            inherit (manifest) filter idPrefix subdir;
+          })
         manifests;
 
   mkSourceLockProgram =
@@ -324,6 +386,6 @@ let
     };
 in
 {
-  inherit loadSourceManifests mkSourceLockProgram sourcesFromLock;
+  inherit loadSourceManifests mkSourceLockProgram mkSourceTree sourcesFromLock;
   __internal = { inherit npinsPinFetchPlan; };
 }

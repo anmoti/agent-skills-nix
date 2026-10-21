@@ -12,6 +12,7 @@ in
   inherit (sourceRegistry)
     loadSourceManifests
     mkSourceLockProgram
+    mkSourceTree
     sourcesFromLock
     ;
   inherit (sources)

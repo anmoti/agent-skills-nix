@@ -41,6 +41,40 @@ let
       let checked = map assertSkillId ids;
       in builtins.deepSeq checked (lib.unique checked);
 
+  isSourceNode = value: isAttrs value && value ? __sourceName;
+
+  # Expand a selector-tree node to catalog IDs. Skill nodes match exactly;
+  # repository/group nodes match every skill below their relative path.
+  nodeIds = context: catalog: node:
+    let
+      name = node.__sourceName or null;
+      relPath = node.__relPath or "";
+      isSkill = node.__skill or false;
+    in
+    if !isString name || name == "" then
+      throw "agent-skills: ${context} contains a source node without __sourceName"
+    else if !isString relPath then
+      throw "agent-skills: ${context} source node ${name} has a non-string __relPath"
+    else if !isBool isSkill then
+      throw "agent-skills: ${context} source node ${name} has a non-boolean __skill"
+    else
+      let
+        matches = lib.filterAttrs
+          (_id: skill:
+            skill.source == name
+            && (
+              if isSkill then
+                skill.relPath == relPath
+              else
+                relPath == "" || lib.hasPrefix "${relPath}/" skill.relPath
+            ))
+          catalog;
+        ids = attrNames matches;
+      in
+      if ids == [ ] then
+        throw "agent-skills: ${context} source node selects no skills (source ${name}, path '${relPath}')"
+      else ids;
+
   # Resolve and validate IDs before returning the list, even if its caller only
   # inspects its length. Validation must not live in unused lazy bindings.
   catalogIds = context: catalog: ids:
@@ -70,10 +104,22 @@ let
           attrNames (lib.filterAttrs (_: skill: skill.source == sourceName) checkedCatalog)
         )
         enableAllSources;
+      checkedEnable =
+        if !isList enable then
+          throw "agent-skills: skills.enable must be a list of skill IDs or source-tree nodes"
+        else if !(builtins.all (entry: isString entry || isSourceNode entry) enable) then
+          throw "agent-skills: skills.enable must contain skill IDs or source-tree nodes"
+        else
+          enable;
+      enableIds = filter isString checkedEnable;
+      enableNodeIds = lib.concatMap
+        (node: nodeIds "skills.enable" checkedCatalog node)
+        (filter isSourceNode checkedEnable);
       selected =
         (if isBool enableAll && enableAll then attrNames checkedCatalog else [ ])
         ++ sourceAllowlist
-        ++ normalizeIds "skills.enable" enable;
+        ++ normalizeIds "skills.enable" enableIds
+        ++ enableNodeIds;
     in
     builtins.seq sourceConfigs (
       builtins.seq checkedCatalog (catalogIds "skills.enable" checkedCatalog selected)

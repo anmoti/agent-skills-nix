@@ -17,5 +17,6 @@ let
 in
 agentLib.mkBundle {
   inherit pkgs selection;
+  flatten = config.skills.flatten or false;
   name = "agent-skills-bundle";
 }

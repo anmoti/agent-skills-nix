@@ -95,8 +95,14 @@ let
     assert manifests.alpha.pin.type == "git";
     assert manifests.alpha.pin.branch == "main; touch PWNED";
     assert manifests.alpha.filter.maxDepth == 3;
-    assert sources.alpha.path == fixturePaths.alpha;
-    assert sources.zeta.idPrefix == "second";
+    assert sources.alpha.__source.path == fixturePaths.alpha;
+    assert sources.alpha.__sourceName == "alpha";
+    assert sources.alpha.__relPath == "";
+    assert sources.alpha.__skill == false;
+    assert sources.alpha."cat-a"."skill-1".__relPath == "cat-a/skill-1";
+    assert sources.alpha."cat-a"."skill-1".__skill == true;
+    assert sources.zeta.__source.idPrefix == "second";
+    assert sources.zeta.__skill == true;
     assert catalog ? "fixture/cat-a/skill-1";
     assert catalog ? "fixture/cat-a/skill-2";
     assert catalog ? "release/release";

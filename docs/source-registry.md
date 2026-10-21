@@ -64,6 +64,24 @@ sources = agentLib.sourcesFromLock {
 catalog = agentLib.discoverCatalog sources;
 ```
 
+`sourcesFromLock` returns a selector tree for each manifest
+(`repository -> group -> skill`). Each node carries its root source config, and
+`normalizeSources` flattens the tree for discovery and selection, so nodes can
+be passed to `skills.enable`:
+
+```nix
+mattpocock = sources.mattpocock;
+
+skills.enable = [
+  mattpocock.engineering          # every skill below engineering
+  mattpocock.productivity.grill-me
+];
+```
+
+`mkSourceTree` builds the same tree for a local `path` source. Each node exposes
+its children plus `__sourceName`, `__relPath`, `__skill`, and the root
+`__source` config.
+
 ## Update source pins
 
 Expose the updater in your consumer flake:

@@ -74,7 +74,8 @@ destination overrides, and ownership checks.
 | Helper | Purpose |
 |--------|---------|
 | `loadSourceManifests` | Loads, validates, and normalizes per-source Nix manifests |
-| `sourcesFromLock` | Verifies manifests against a schema-v1 lock containing an npins version-8 pin set and returns path-backed sources |
+| `sourcesFromLock` | Verifies manifests against a schema-v1 lock containing an npins version-8 pin set and returns path-backed selector trees |
+| `mkSourceTree` | Builds a selector tree for a local `path` source |
 | `mkSourceLockProgram` | Builds the `skills-sources-lock` updater |
 | `mkAgentPlugin` | Exports an explicit skill map as a portable, skills-only plugin |
 

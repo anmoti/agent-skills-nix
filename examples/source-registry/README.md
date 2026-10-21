@@ -12,5 +12,6 @@ nix run .#skills-sources-lock
 ```
 
 Then review and commit both the manifests and lock file. The resulting
-`sources` value has the same shape as the existing `sources` DSL and can be
-passed directly to `discoverCatalog`, `selectSkills`, and Home Manager.
+`sources` value is a selector tree accepted by `discoverCatalog`,
+`selectSkills`, and Home Manager. Its nodes can also be passed directly to
+`skills.enable` to select a repository, group, or individual skill.

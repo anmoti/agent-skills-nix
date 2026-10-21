@@ -81,6 +81,15 @@ These selections are combined. By default, `skills.enable` is empty,
 `skills.enableAll` is `false`, and `skills.explicit` is empty. Unknown skill IDs
 or source names fail evaluation.
 
+`skills.enable` also accepts selector-tree nodes returned by `sourcesFromLock`
+(`repository -> group -> skill`; see [Source registry](./source-registry.md)).
+A non-skill node expands to every skill below it.
+
+Set `skills.flatten = true;` to expose each selected skill under its basename
+instead of its nested ID. Use it for agents that scan only one directory level,
+such as Claude Code (`skills/<name>/SKILL.md`). Basename collisions fail
+evaluation.
+
 An explicit declaration uses `from` to name a source and `path` to locate the
 skill relative to that source's `subdir`. The path defaults to the declaration
 name; `rename` sets the final output ID:

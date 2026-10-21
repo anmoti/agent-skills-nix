@@ -8,4 +8,4 @@ let
     lockFile = builtins.toPath lockFile;
   };
 in
-toString sources.local.path
+toString sources.local.__source.path

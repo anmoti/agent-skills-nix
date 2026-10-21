@@ -6,6 +6,7 @@
   skills = {
     enable = [ ];
     enableAll = false;
+    flatten = false;
     explicit = { };
   };
   targets = agentLib.defaultTargets;

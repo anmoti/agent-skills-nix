@@ -99,14 +99,22 @@ let
       in
       fixed;
 
-  # Materialize bundle in the store, preserving nested paths.
-  mkBundle = { pkgs, selection, name ? "agent-skills-bundle" }:
+  # Materialize bundle in the store, preserving nested paths by default.
+  # `flatten = true` uses each ID's basename so agents that only scan one
+  # directory level (for example Claude Code's skills/*/SKILL.md) see all
+  # selected skills. Leaf-name collisions fail evaluation.
+  mkBundle = { pkgs, selection, name ? "agent-skills-bundle", flatten ? false }:
     let
       skills = map
         (skill: skill // {
           agents = selectionLib.agentsFor skill.id skill;
+          targetId = if flatten then baseNameOf skill.id else skill.id;
         })
         (builtins.attrValues selection);
+      targetIds = map (skill: skill.targetId) skills;
+      duplicateTargetIds = lib.filter
+        (id: builtins.length (lib.filter (other: other == id) targetIds) > 1)
+        (unique targetIds);
       hasTargetRestrictions = lib.any (skill: skill.agents != null) skills;
       skillTargetNames = unique (concatMap (skill: if skill.agents == null then [ ] else skill.agents) skills);
       # Share materialized skills (including transforms and dependencies) across
@@ -120,9 +128,9 @@ let
           pkgs.runCommand "${name}-filtered" { preferLocalBuild = true; } ''
             mkdir -p "$out"
             ${concatMapStringsSep "\n" (skill: ''
-              dest=${lib.escapeShellArg skill.id}
+              dest=${lib.escapeShellArg skill.targetId}
               mkdir -p "$out/$(dirname "$dest")"
-              ln -s ${lib.escapeShellArg "${result}/${skill.id}"} "$out/$dest"
+              ln -s ${lib.escapeShellArg "${result}/${skill.targetId}"} "$out/$dest"
             '') allowed}
           '';
       # --safe-links drops symlinks whose textual target escapes the root;
@@ -212,7 +220,7 @@ let
             in
             ''
                         ${validateSkillPath}
-                        dest=${lib.escapeShellArg skill.id}
+                        dest=${lib.escapeShellArg skill.targetId}
                         mkdir -p "$out/$dest"
                         # Link all files except SKILL.md
                         for f in ${lib.escapeShellArg skillPath}/* ${lib.escapeShellArg skillPath}/*.; do
@@ -229,7 +237,7 @@ let
               SKILL_EOF
             '' else ''
             ${validateSkillPath}
-            dest=${lib.escapeShellArg skill.id}
+            dest=${lib.escapeShellArg skill.targetId}
             mkdir -p "$out/$(dirname "$dest")"
             ln -s ${lib.escapeShellArg skillPath} "$out/$dest"
           '')
@@ -243,7 +251,10 @@ let
         ${buildCommands}
       '';
     in
-    result;
+    if duplicateTargetIds != [ ] then
+      throw "agent-skills: flattening skill IDs would collide: ${lib.concatStringsSep ", " duplicateTargetIds}"
+    else
+      result;
 in
 {
   inherit

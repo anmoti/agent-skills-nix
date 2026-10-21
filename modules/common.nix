@@ -53,48 +53,6 @@ let
     };
   });
 
-  sourceType = lib.types.submodule ({ ... }: {
-    options = {
-      input = lib.mkOption {
-        type = lib.types.nullOr lib.types.str;
-        default = null;
-        description = "Flake input name providing this source.";
-      };
-
-      path = lib.mkOption {
-        type = lib.types.nullOr lib.types.path;
-        default = null;
-        description = "Source path; takes precedence over `input` when both are set.";
-      };
-
-      subdir = lib.mkOption {
-        type = lib.types.str;
-        default = ".";
-        description = "Subdirectory under the input/path that contains skills.";
-      };
-
-      idPrefix = lib.mkOption {
-        type = lib.types.nullOr lib.types.str;
-        default = null;
-        description = "Optional prefix to prepend to discovered skill IDs (for example, `openai` -> `openai/pdf`).";
-      };
-
-      filter = {
-        maxDepth = lib.mkOption {
-          type = lib.types.nullOr lib.types.ints.unsigned;
-          default = null;
-          description = "Recursion depth when discovering SKILL.md directories. 0 = source root only, 1 = immediate children, 2 = one level of nesting, null = unlimited (capped at 100).";
-        };
-
-        nameRegex = lib.mkOption {
-          type = lib.types.nullOr lib.types.str;
-          default = null;
-          description = "Optional regex to restrict discovered skills.";
-        };
-      };
-    };
-  });
-
   skillType = lib.types.submodule ({ name, ... }: {
     options = {
       enable = lib.mkOption {
@@ -158,19 +116,36 @@ in
     enable = lib.mkEnableOption "Declarative Agent Skills management.";
 
     sources = lib.mkOption {
-      type = lib.types.attrsOf sourceType;
+      type = lib.types.attrsOf lib.types.attrs;
       default = { };
-      description = "Named skill sources (flake input or path).";
+      description = ''
+        Named skill sources. Values may be ordinary source configs
+        (`path`/`input`, `subdir`, `idPrefix`, `filter`) or selector trees
+        returned by `sourcesFromLock` / `mkSourceTree`.
+      '';
     };
 
     skills = lib.mkOption {
       type = lib.types.submodule ({ ... }: {
         options = {
           enable = lib.mkOption {
-            type = lib.types.listOf lib.types.str;
+            type = lib.types.listOf (lib.types.either lib.types.str lib.types.attrs);
             default = [ ];
-            description = "Skill IDs to enable from discovered catalog.";
+            description = ''
+              Skill IDs or source-tree nodes to enable from the discovered
+              catalog. Non-skill nodes expand to every skill below them.
+            '';
             example = [ "format-pr" "nix-review" ];
+          };
+
+          flatten = lib.mkOption {
+            type = lib.types.bool;
+            default = false;
+            description = ''
+              Flatten selected skill IDs to their basename in the bundle.
+              Useful for Claude Code, which discovers skills/<name>/SKILL.md.
+              Leaf-name collisions fail evaluation.
+            '';
           };
 
           enableAll = lib.mkOption {
@@ -189,6 +164,7 @@ in
       default = {
         enable = [ ];
         enableAll = false;
+        flatten = false;
         explicit = { };
       };
       description = "Skill selection (allowlist + explicit).";
@@ -242,7 +218,10 @@ in
         skills = cfg.skills.explicit;
         sources = cfg.sources;
       };
-      bundle = agentLib.mkBundle { inherit pkgs selection; };
+      bundle = agentLib.mkBundle {
+        inherit pkgs selection;
+        flatten = cfg.skills.flatten;
+      };
     in
     {
       programs.agent-skills.catalog = catalog;

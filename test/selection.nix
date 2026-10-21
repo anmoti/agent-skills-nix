@@ -12,6 +12,12 @@ let
   selectionRejected = args: rejected (builtins.attrNames (select args));
   skillRejected = cfg: selectionRejected { skills.example = baseSkill // cfg; };
 
+  nestedTree = agentLib.mkSourceTree "nested" { path = ./fixtures/nested-skills; };
+  nestedTreeSources = { nested = nestedTree; };
+  nestedTreeCatalog = agentLib.discoverCatalog nestedTreeSources;
+  treeAllowlist = extra: agentLib.allowlistFor
+    ({ catalog = nestedTreeCatalog; sources = nestedTreeSources; } // extra);
+
   # These intentionally do not use deepSeq: attrNames/length must be enough to
   # reject invalid declarations even if no selected record has been inspected.
   failures = {
@@ -22,6 +28,9 @@ let
     invalid-enable-id = rejected (allowlist { enable = [ "../fixture" ]; });
     invalid-enable-entry = rejected (allowlist { enable = [ null ]; });
     unknown-enable-id = rejected (builtins.length (allowlist { enable = [ "missing" ]; }));
+    empty-enable-node = rejected (treeAllowlist {
+      enable = [ { __sourceName = "nested"; __relPath = "missing"; __skill = false; } ];
+    });
     unknown-allowlist-id = selectionRejected { allowlist = [ "missing" ]; };
     invalid-allowlist-type = selectionRejected { allowlist = "fixture"; };
     invalid-allowlist-id = selectionRejected { allowlist = [ "" ]; };
@@ -95,16 +104,39 @@ let
     catalog = { };
     skills.example = { from = "fixture"; path = "skill-1"; };
   };
+  treeRootIds = treeAllowlist { enable = [ nestedTree ]; };
+  treeGroupIds = treeAllowlist { enable = [ nestedTree."cat-a" ]; };
+  treeSkillIds = treeAllowlist { enable = [ nestedTree."cat-a"."skill-1" ]; };
   bundle = agentLib.mkBundle {
     inherit pkgs selection;
     name = "agent-skills-selection-bundle";
   };
+  flatBundle = agentLib.mkBundle {
+    inherit pkgs selection;
+    flatten = true;
+    name = "agent-skills-selection-flat-bundle";
+  };
+  collisionSelection = select {
+    skills.first = baseSkill // { rename = "a/same"; };
+    skills.second = baseSkill // { rename = "b/same"; };
+  };
+  flatCollision = rejected (builtins.deepSeq
+    (agentLib.mkBundle {
+      inherit pkgs;
+      selection = collisionSelection;
+      flatten = true;
+    })
+    true);
 in
 assert lib.assertMsg (failedChecks == [ ])
   "Selection accepted invalid inputs: ${lib.concatStringsSep ", " failedChecks}";
 assert allowlist { enableAll = true; enable = [ "fixture" ]; } == [ "fixture" ];
 assert allowlist { enableAll = [ "fixture" ]; } == [ "fixture" ];
 assert allowlist { } == [ ];
+assert treeRootIds == [ "cat-a/skill-1" "cat-a/skill-2" ];
+assert treeGroupIds == treeRootIds;
+assert treeSkillIds == [ "cat-a/skill-1" ];
+assert flatCollision;
 assert ids == [ "fixture" "null-name" "renamed/skill" ];
 assert lib.all (id: selection.${id}.id == id) ids;
 assert selection."renamed/skill".agents == [ "codex" ];
@@ -118,6 +150,10 @@ pkgs.runCommand "agent-skills-selection-test" { } ''
   test -f ${bundle.forTarget "codex"}/renamed/skill/SKILL.md
   test ! -e ${bundle.forTarget "claude"}/renamed/skill
   test ! -e ${bundle}/disabled
+  test -f ${flatBundle}/fixture/SKILL.md
+  test -f ${flatBundle}/null-name/SKILL.md
+  test -f ${flatBundle}/skill/SKILL.md
+  test ! -e ${flatBundle}/renamed
   mkdir -p "$out"
   touch "$out/ok"
 ''

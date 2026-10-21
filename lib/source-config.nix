@@ -59,7 +59,7 @@ let
       rawPath = cfg.path or null;
       path = if builtins.isAttrs rawPath && rawPath ? outPath then rawPath.outPath else rawPath;
       input = optionalString "${context}.input" (cfg.input or null);
-      discovery = normalizeDiscoveryConfig context (builtins.removeAttrs cfg [ "input" "path" ]);
+      discovery = normalizeDiscoveryConfig context (removeAttrs cfg [ "input" "path" ]);
       normalized = discovery // { inherit input path; };
     in
     if path != null && !(builtins.isPath path || (builtins.isString path && lib.hasPrefix "/" path)) then
@@ -68,13 +68,24 @@ let
       fail "${context} must set either `path` or `input`"
     else builtins.deepSeq normalized normalized;
 
-  normalizeSources = value:
+  # Source trees built by `sourcesFromLock` and `mkSourceTree` keep the root
+  # source config under `__source`. Discovery and selection still consume the
+  # original flat shape, so flatten the top-level repository nodes first.
+  flattenSourceTree = value:
     if !builtins.isAttrs value then fail "sources must be an attribute set"
     else
-      let normalized = builtins.mapAttrs normalizeSourceConfig value;
-      in builtins.deepSeq normalized normalized;
+      builtins.mapAttrs
+        (_name: cfg:
+          if builtins.isAttrs cfg && cfg ? __source then cfg.__source else cfg)
+        value;
+
+  normalizeSources = value:
+    let flattened = flattenSourceTree value;
+    in
+    let normalized = builtins.mapAttrs normalizeSourceConfig flattened;
+    in builtins.deepSeq normalized normalized;
 in
 {
   inherit assertOnlyKeys assertSafeRelPath assertSkillId
-    normalizeDiscoveryConfig normalizeSourceConfig normalizeSources;
+    flattenSourceTree normalizeDiscoveryConfig normalizeSourceConfig normalizeSources;
 }
